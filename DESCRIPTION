@@ -12,6 +12,7 @@ Depends:
     SqlRender
 Imports:
     CohortMethod,
+    EmpiricalCalibration,
     jsonlite,
     httr,
     parallel,

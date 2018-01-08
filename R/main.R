@@ -7,16 +7,16 @@
 run <- function(cdmDb, connectionDetails)
 {
   # Data extraction ----
-  cdmDatabaseSchema <- cdmDb$cdmDatabaseSchema
-  resultsDatabaseSchema <- cdmDb$resultsDatabaseSchema
+  cdmDatabaseSchema <- cdmDb$value
+  resultsDatabaseSchema <- cdmDb$value
   exposureTable <- "cohort"
   outcomeTable <- "cohort"
   cdmVersion <- "5" 
   outputFolder <- "output"
-  maxCores <- parallel::detectCores()
-  if(!dir.exists(outputFolder)){
-    dir.create(outputFolder, recursive = TRUE)
-  }
+  maxCores <- 10 #parallel::detectCores()
+  # if(!dir.exists(outputFolder)){
+  #   dir.create(outputFolder, recursive = TRUE)
+  # }
   setwd(outputFolder)
   
   targetCohortId <- 5441
@@ -77,72 +77,96 @@ run <- function(cdmDb, connectionDetails)
   
   
   # Define which types of covariates must be constructed ----
-  covariateSettings <- FeatureExtraction::createCovariateSettings(useCovariateDemographics = TRUE,
-                                                                  useCovariateDemographicsGender = TRUE,
-                                                                  useCovariateDemographicsRace = TRUE,
-                                                                  useCovariateDemographicsEthnicity = TRUE,
-                                                                  useCovariateDemographicsAge = TRUE, 
-                                                                  useCovariateDemographicsYear = TRUE,
-                                                                  useCovariateDemographicsMonth = FALSE,
-                                                                  useCovariateConditionOccurrence = TRUE,    
-                                                                  useCovariateConditionOccurrenceLongTerm = TRUE,
-                                                                  useCovariateConditionOccurrenceShortTerm = TRUE,
-                                                                  useCovariateConditionOccurrenceInptMediumTerm = TRUE,
-                                                                  useCovariateConditionEra = TRUE, 
-                                                                  useCovariateConditionEraEver = TRUE,
-                                                                  useCovariateConditionEraOverlap = TRUE,
-                                                                  useCovariateConditionGroup = TRUE,
-                                                                  useCovariateConditionGroupMeddra = TRUE,
-                                                                  useCovariateConditionGroupSnomed = TRUE,
-                                                                  useCovariateDrugExposure = TRUE, 
-                                                                  useCovariateDrugExposureLongTerm = TRUE,
-                                                                  useCovariateDrugExposureShortTerm = TRUE, 
-                                                                  useCovariateDrugEra = TRUE,
-                                                                  useCovariateDrugEraLongTerm = TRUE, 
-                                                                  useCovariateDrugEraShortTerm = TRUE,
-                                                                  useCovariateDrugEraOverlap = TRUE, 
-                                                                  useCovariateDrugEraEver = TRUE,
-                                                                  useCovariateDrugGroup = TRUE, 
-                                                                  useCovariateProcedureOccurrence = TRUE,
-                                                                  useCovariateProcedureOccurrenceLongTerm = TRUE,
-                                                                  useCovariateProcedureOccurrenceShortTerm = TRUE,
-                                                                  useCovariateProcedureGroup = FALSE, 
-                                                                  useCovariateObservation = FALSE,
-                                                                  useCovariateObservationLongTerm = FALSE, 
-                                                                  useCovariateObservationShortTerm = FALSE,
-                                                                  useCovariateObservationCountLongTerm = FALSE, 
-                                                                  useCovariateMeasurement = TRUE,
-                                                                  useCovariateMeasurementLongTerm = TRUE, 
-                                                                  useCovariateMeasurementShortTerm = TRUE,
-                                                                  useCovariateMeasurementCountLongTerm = TRUE,
-                                                                  useCovariateMeasurementBelow = TRUE,
-                                                                  useCovariateMeasurementAbove = TRUE, 
-                                                                  useCovariateConceptCounts = TRUE,
-                                                                  useCovariateRiskScores = TRUE, 
-                                                                  useCovariateRiskScoresCharlson = TRUE,
-                                                                  useCovariateRiskScoresDCSI = TRUE, 
-                                                                  useCovariateRiskScoresCHADS2 = TRUE,
-                                                                  useCovariateRiskScoresCHADS2VASc = FALSE,
-                                                                  useCovariateInteractionYear = TRUE, 
-                                                                  useCovariateInteractionMonth = FALSE,
-                                                                  deleteCovariatesSmallCount = 100,
-                                                                  longTermDays = 365,
-                                                                  mediumTermDays = 180,
-                                                                  shortTermDays = 30,
-                                                                  windowEndDays = 0)
+  covariateSettings <- FeatureExtraction::createCovariateSettings(useDemographicsGender = TRUE,
+                                                                  useDemographicsAge = TRUE, useDemographicsAgeGroup = TRUE,
+                                                                  useDemographicsRace = TRUE, useDemographicsEthnicity = TRUE,
+                                                                  useDemographicsIndexYear = TRUE, useDemographicsIndexMonth = TRUE,
+                                                                  useDemographicsPriorObservationTime = TRUE,
+                                                                  useDemographicsPostObservationTime = TRUE,
+                                                                  useDemographicsTimeInCohort = FALSE,
+                                                                  useDemographicsIndexYearMonth = TRUE,
+                                                                  useConditionOccurrenceAnyTimePrior = TRUE,
+                                                                  useConditionOccurrenceLongTerm = TRUE,
+                                                                  useConditionOccurrenceMediumTerm = TRUE,
+                                                                  useConditionOccurrenceShortTerm = TRUE,
+                                                                  useConditionOccurrenceInpatientAnyTimePrior = TRUE,
+                                                                  useConditionOccurrenceInpatientLongTerm = TRUE,
+                                                                  useConditionOccurrenceInpatientMediumTerm = TRUE,
+                                                                  useConditionOccurrenceInpatientShortTerm = TRUE,
+                                                                  useConditionEraAnyTimePrior = TRUE, useConditionEraLongTerm = TRUE,
+                                                                  useConditionEraMediumTerm = TRUE, useConditionEraShortTerm = TRUE,
+                                                                  useConditionEraOverlapping = TRUE, useConditionEraStartLongTerm = TRUE,
+                                                                  useConditionEraStartMediumTerm = TRUE,
+                                                                  useConditionEraStartShortTerm = TRUE,
+                                                                  useConditionGroupEraAnyTimePrior = TRUE,
+                                                                  useConditionGroupEraLongTerm = TRUE,
+                                                                  useConditionGroupEraMediumTerm = TRUE,
+                                                                  useConditionGroupEraShortTerm = TRUE,
+                                                                  useConditionGroupEraOverlapping = TRUE,
+                                                                  useConditionGroupEraStartLongTerm = TRUE,
+                                                                  useConditionGroupEraStartMediumTerm = TRUE,
+                                                                  useConditionGroupEraStartShortTerm = TRUE,
+                                                                  useDrugExposureAnyTimePrior = TRUE, useDrugExposureLongTerm = TRUE,
+                                                                  useDrugExposureMediumTerm = TRUE, useDrugExposureShortTerm = TRUE,
+                                                                  useDrugEraAnyTimePrior = TRUE, useDrugEraLongTerm = TRUE,
+                                                                  useDrugEraMediumTerm = TRUE, useDrugEraShortTerm = TRUE,
+                                                                  useDrugEraOverlapping = TRUE, useDrugEraStartLongTerm = TRUE,
+                                                                  useDrugEraStartMediumTerm = TRUE, useDrugEraStartShortTerm = TRUE,
+                                                                  useDrugGroupEraAnyTimePrior = TRUE, useDrugGroupEraLongTerm = TRUE,
+                                                                  useDrugGroupEraMediumTerm = TRUE, useDrugGroupEraShortTerm = TRUE,
+                                                                  useDrugGroupEraOverlapping = TRUE, useDrugGroupEraStartLongTerm = TRUE,
+                                                                  useDrugGroupEraStartMediumTerm = TRUE,
+                                                                  useDrugGroupEraStartShortTerm = TRUE,
+                                                                  useProcedureOccurrenceAnyTimePrior = TRUE,
+                                                                  useProcedureOccurrenceLongTerm = TRUE,
+                                                                  useProcedureOccurrenceMediumTerm = TRUE,
+                                                                  useProcedureOccurrenceShortTerm = TRUE,
+                                                                  useDeviceExposureAnyTimePrior = TRUE, useDeviceExposureLongTerm = TRUE,
+                                                                  useDeviceExposureMediumTerm = TRUE, useDeviceExposureShortTerm = TRUE,
+                                                                  useMeasurementAnyTimePrior = TRUE, useMeasurementLongTerm = TRUE,
+                                                                  useMeasurementMediumTerm = TRUE, useMeasurementShortTerm = TRUE,
+                                                                  useMeasurementValueAnyTimePrior = TRUE,
+                                                                  useMeasurementValueLongTerm = TRUE,
+                                                                  useMeasurementValueMediumTerm = TRUE,
+                                                                  useMeasurementValueShortTerm = TRUE,
+                                                                  useMeasurementRangeGroupAnyTimePrior = TRUE,
+                                                                  useMeasurementRangeGroupLongTerm = TRUE,
+                                                                  useMeasurementRangeGroupMediumTerm = TRUE,
+                                                                  useMeasurementRangeGroupShortTerm = TRUE,
+                                                                  useObservationAnyTimePrior = TRUE, useObservationLongTerm = TRUE,
+                                                                  useObservationMediumTerm = TRUE, useObservationShortTerm = TRUE,
+                                                                  useCharlsonIndex = TRUE, useDcsi = TRUE, useChads2 = TRUE,
+                                                                  useChads2Vasc = TRUE, useDistinctConditionCountLongTerm = TRUE,
+                                                                  useDistinctConditionCountMediumTerm = TRUE,
+                                                                  useDistinctConditionCountShortTerm = TRUE,
+                                                                  useDistinctIngredientCountLongTerm = TRUE,
+                                                                  useDistinctIngredientCountMediumTerm = TRUE,
+                                                                  useDistinctIngredientCountShortTerm = TRUE,
+                                                                  useDistinctProcedureCountLongTerm = TRUE,
+                                                                  useDistinctProcedureCountMediumTerm = TRUE,
+                                                                  useDistinctProcedureCountShortTerm = TRUE,
+                                                                  useDistinctMeasurementCountLongTerm = TRUE,
+                                                                  useDistinctMeasurementCountMediumTerm = TRUE,
+                                                                  useDistinctMeasurementCountShortTerm = TRUE,
+                                                                  useVisitCountLongTerm = TRUE, useVisitCountMediumTerm = TRUE,
+                                                                  useVisitCountShortTerm = TRUE, longTermStartDays = -365,
+                                                                  mediumTermStartDays = -180, shortTermStartDays = -30, endDays = 0,
+                                                                  includedCovariateConceptIds = c(), addDescendantsToInclude = TRUE,
+                                                                  excludedCovariateConceptIds = c(), addDescendantsToExclude = TRUE,
+                                                                  includedCovariateIds = c())
   
   
   
   getDbCmDataArgs <- CohortMethod::createGetDbCohortMethodDataArgs(washoutPeriod = 365,
-                                                                   firstExposureOnly = FALSE,
+                                                                   firstExposureOnly = TRUE,
                                                                    removeDuplicateSubjects = TRUE,
-                                                                   studyStartDate = "2012-06-01",
-                                                                   studyEndDate = "2017-06-01",
+                                                                   studyStartDate = "20120601",
+                                                                   studyEndDate = "20170630",
                                                                    excludeDrugsFromCovariates = FALSE,
                                                                    covariateSettings = covariateSettings)
   
   createStudyPopArgs <- CohortMethod::createCreateStudyPopulationArgs(removeSubjectsWithPriorOutcome = TRUE,
-                                                                      firstExposureOnly = FALSE,
+                                                                      firstExposureOnly = TRUE,
                                                                       washoutPeriod = 365,
                                                                       removeDuplicateSubjects = TRUE,
                                                                       minDaysAtRisk = 1,
@@ -214,6 +238,7 @@ run <- function(cdmDb, connectionDetails)
   
   # Perform Empirical Calibration ----
   newSummary <- data.frame()
+  
   # Calibrate p-values:
   drugComparatorOutcome <- drugComparatorOutcomesList[[1]]
   for (drugComparatorOutcome in drugComparatorOutcomesList) {

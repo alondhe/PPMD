@@ -1,23 +1,141 @@
 
+#' Create Target and Comparator Cohorts
+#' @param cdmDb
+#' @param scratchDatabaseSchema
+#' @param connectionDetails
+#' 
+#' @export
+createCohorts <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
+{
+  cohorts <- list(
+    list(cohortId = 5441, clause = "and A.episode_length >= 161 and A.episode_length < 259"), 
+    list(cohortId = 5442, clause = "and A.episode_length >= 259 and A.episode_length <= 294")
+  )
+  
+  connection <- DatabaseConnector::connect(connectionDetails = connectionDetails)
+  tablePrefix <- paste("al", "ppmd", strsplit(x = cdmDb$key, split = "_")[[1]][1], sep = "_")
+  
+  for (cohort in cohorts)
+  {
+    sql <- SqlRender::loadRenderTranslateSql(sqlFilename = "createCohort.sql", 
+                                             packageName = "PPMD", 
+                                             dbms = connectionDetails$dbms,
+                                             cdm_database_schema = cdmDb$cdmDatabaseSchema,
+                                             target_database_schema = scratchDatabaseSchema,
+                                             target_cohort_table = paste(tablePrefix, "cohort", sep = "_"),
+                                             resultsDatabaseSchema = cdmDb$resultsDatabaseSchema,
+                                             whereClause = cohort$clause,
+                                             target_cohort_id = cohort$cohortId)
+    
+    DatabaseConnector::executeSql(connection = connection, sql = sql)
+  }
+  DatabaseConnector::disconnect(connection = connection)
+
+}
+
+#' @export
+createDeliveryCovariateSettings <- function(useDelivery = TRUE) {
+  covariateSettings <- list(useDelivery = useDelivery)
+  attr(covariateSettings, "fun") <- "getDeliveryCovariateData"
+  class(covariateSettings) <- "covariateSettings"
+  return(covariateSettings)
+}
+
+#' @export
+getDeliveryCovariateData <- function(connection, 
+                                     oracleTempSchema = NULL, 
+                                     cdmDatabaseSchema, 
+                                     cdmVersion = "5", 
+                                     cohortTable = "#cohort_person",
+                                     cohortId = -1,
+                                     rowIdField = "subject_id", 
+                                     covariateSettings,
+                                     aggregated = FALSE) 
+{
+  if (covariateSettings$useDelivery == FALSE) {
+    return(NULL)
+  }
+  if (aggregated)
+  {
+    stop("Aggregation not supported")
+  }
+  
+  writeLines("***Creating custom delivery covariates***") 
+  sql <- loadRenderTranslateSql(sqlFilename = "createDeliveryCovariates.sql", 
+                                packageName = "PPMD", 
+                                dbms = attr(connection, "dbms"),
+                                cohortTable = cohortTable,
+                                resultsDatabaseSchema = "cdm_optum_extended_ses_v675.ohdsi_results")
+  sql <- SqlRender::translateSql(sql, targetDialect = attr(connection, "dbms"))$sql
+  # Retrieve the covariate:
+  covariates <- DatabaseConnector::querySql.ffdf(connection, sql)
+  # Convert colum names to camelCase:
+  colnames(covariates) <- snakeCaseToCamelCase(colnames(covariates))
+  
+  # Construct covariate reference:
+  covariateRef_1 <- data.frame(covariateId = 1,
+                               covariateName = "Delivery - SB",
+                               analysisId = 1,
+                               conceptId = 0)
+  covariateRef_2 <- data.frame(covariateId = 2,
+                               covariateName = "Delivery - ECT",
+                               analysisId = 1,
+                               conceptId = 0)
+  covariateRef_3 <- data.frame(covariateId = 3,
+                               covariateName = "Delivery - LB/DELIV",
+                               analysisId = 1,
+                               conceptId = 0)
+  covariateRef <- rbind(covariateRef_1, covariateRef_2, covariateRef_3)
+  covariateRef <- ff::as.ffdf(covariateRef)
+  
+  
+  # Construct analysis reference:
+  analysisRef <- data.frame(analysisId = 1,
+                            analysisName = "Delivery Type",
+                            domainId = "Procedure",
+                            startDay = 0,
+                            endDay = 0,
+                            isBinary = "Y",
+                            missingMeansZero = "Y")
+  analysisRef <- ff::as.ffdf(analysisRef)
+  
+  #Construct analysis reference:
+  metaData <- list(sql = sql, call = match.call())
+  result <- list(covariates = covariates,
+                 covariateRef = covariateRef,
+                 analysisRef = analysisRef,
+                 metaData = metaData)
+  class(result) <- "covariateData"
+  
+  writeLines("***Custom Delivery covariates created***")
+  return(result)
+}
+
+
+
 #' Run the analysis for a CDM
 #' 
 #' @param cdmDb
+#' @param scratchDatabaseSchema
+#' @param connectionDetails
 #' 
 #' @export
-run <- function(cdmDb, connectionDetails)
+run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
 {
   # Data extraction ----
-  cdmDatabaseSchema <- cdmDb$value
-  resultsDatabaseSchema <- cdmDb$value
-  exposureTable <- "cohort"
+  tablePrefix <- paste("al", "ppmd", strsplit(x = cdmDb$key, split = "_")[[1]][1], sep = "_")
+  
+  cdmDatabaseSchema <- cdmDb$cdmDatabaseSchema
+  resultsDatabaseSchema <- scratchDatabaseSchema
+  exposureTable <- paste(tablePrefix, "cohort", sep = "_")
   outcomeTable <- "cohort"
   cdmVersion <- "5" 
-  outputFolder <- "output"
-  maxCores <- 10 #parallel::detectCores()
+  outputFolder <- "output_2"
+  maxCores <- parallel::detectCores()
   # if(!dir.exists(outputFolder)){
   #   dir.create(outputFolder, recursive = TRUE)
   # }
-  setwd(outputFolder)
+  #setwd(outputFolder)
   
   targetCohortId <- 5441
   comparatorCohortId <- 5442
@@ -44,7 +162,9 @@ run <- function(cdmDb, connectionDetails)
   
   # Get all  Concept IDs for exclusion ----
   
-  excludedConcepts <- c()
+  excludedConcepts <- unique(c(4175637, 
+                               OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 4805),
+                               OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 5305)))
   
   # Get all  Concept IDs for inclusion ----
   
@@ -65,7 +185,7 @@ run <- function(cdmDb, connectionDetails)
   negativeControlConcepts <- c()
   
   
-  # Create drug comparator and outcome arguments by combining target + comparitor + outcome + negative controls ----
+  # Create drug comparator and outcome arguments by combining target + comparator + outcome + negative controls ----
   dcos <- CohortMethod::createDrugComparatorOutcomes(targetId = targetCohortId,
                                                      comparatorId = comparatorCohortId,
                                                      excludedCovariateConceptIds = excludedConcepts,
@@ -77,14 +197,17 @@ run <- function(cdmDb, connectionDetails)
   
   
   # Define which types of covariates must be constructed ----
-  covariateSettings <- FeatureExtraction::createCovariateSettings(useDemographicsGender = TRUE,
-                                                                  useDemographicsAge = TRUE, useDemographicsAgeGroup = TRUE,
-                                                                  useDemographicsRace = TRUE, useDemographicsEthnicity = TRUE,
-                                                                  useDemographicsIndexYear = TRUE, useDemographicsIndexMonth = TRUE,
+  covariateSettings <- FeatureExtraction::createCovariateSettings(useDemographicsGender = FALSE,
+                                                                  useDemographicsAge = TRUE, 
+                                                                  useDemographicsAgeGroup = TRUE,
+                                                                  useDemographicsRace = TRUE, 
+                                                                  useDemographicsEthnicity = TRUE,
+                                                                  useDemographicsIndexYear = TRUE, 
+                                                                  useDemographicsIndexMonth = FALSE,
                                                                   useDemographicsPriorObservationTime = TRUE,
                                                                   useDemographicsPostObservationTime = TRUE,
                                                                   useDemographicsTimeInCohort = FALSE,
-                                                                  useDemographicsIndexYearMonth = TRUE,
+                                                                  useDemographicsIndexYearMonth = FALSE,
                                                                   useConditionOccurrenceAnyTimePrior = TRUE,
                                                                   useConditionOccurrenceLongTerm = TRUE,
                                                                   useConditionOccurrenceMediumTerm = TRUE,
@@ -93,9 +216,12 @@ run <- function(cdmDb, connectionDetails)
                                                                   useConditionOccurrenceInpatientLongTerm = TRUE,
                                                                   useConditionOccurrenceInpatientMediumTerm = TRUE,
                                                                   useConditionOccurrenceInpatientShortTerm = TRUE,
-                                                                  useConditionEraAnyTimePrior = TRUE, useConditionEraLongTerm = TRUE,
-                                                                  useConditionEraMediumTerm = TRUE, useConditionEraShortTerm = TRUE,
-                                                                  useConditionEraOverlapping = TRUE, useConditionEraStartLongTerm = TRUE,
+                                                                  useConditionEraAnyTimePrior = TRUE, 
+                                                                  useConditionEraLongTerm = TRUE,
+                                                                  useConditionEraMediumTerm = TRUE, 
+                                                                  useConditionEraShortTerm = TRUE,
+                                                                  useConditionEraOverlapping = TRUE, 
+                                                                  useConditionEraStartLongTerm = TRUE,
                                                                   useConditionEraStartMediumTerm = TRUE,
                                                                   useConditionEraStartShortTerm = TRUE,
                                                                   useConditionGroupEraAnyTimePrior = TRUE,
@@ -106,25 +232,38 @@ run <- function(cdmDb, connectionDetails)
                                                                   useConditionGroupEraStartLongTerm = TRUE,
                                                                   useConditionGroupEraStartMediumTerm = TRUE,
                                                                   useConditionGroupEraStartShortTerm = TRUE,
-                                                                  useDrugExposureAnyTimePrior = TRUE, useDrugExposureLongTerm = TRUE,
-                                                                  useDrugExposureMediumTerm = TRUE, useDrugExposureShortTerm = TRUE,
-                                                                  useDrugEraAnyTimePrior = TRUE, useDrugEraLongTerm = TRUE,
-                                                                  useDrugEraMediumTerm = TRUE, useDrugEraShortTerm = TRUE,
-                                                                  useDrugEraOverlapping = TRUE, useDrugEraStartLongTerm = TRUE,
-                                                                  useDrugEraStartMediumTerm = TRUE, useDrugEraStartShortTerm = TRUE,
-                                                                  useDrugGroupEraAnyTimePrior = TRUE, useDrugGroupEraLongTerm = TRUE,
-                                                                  useDrugGroupEraMediumTerm = TRUE, useDrugGroupEraShortTerm = TRUE,
-                                                                  useDrugGroupEraOverlapping = TRUE, useDrugGroupEraStartLongTerm = TRUE,
+                                                                  useDrugExposureAnyTimePrior = TRUE, 
+                                                                  useDrugExposureLongTerm = TRUE,
+                                                                  useDrugExposureMediumTerm = TRUE, 
+                                                                  useDrugExposureShortTerm = TRUE,
+                                                                  useDrugEraAnyTimePrior = TRUE, 
+                                                                  useDrugEraLongTerm = TRUE,
+                                                                  useDrugEraMediumTerm = TRUE, 
+                                                                  useDrugEraShortTerm = TRUE,
+                                                                  useDrugEraOverlapping = TRUE, 
+                                                                  useDrugEraStartLongTerm = TRUE,
+                                                                  useDrugEraStartMediumTerm = TRUE, 
+                                                                  useDrugEraStartShortTerm = TRUE,
+                                                                  useDrugGroupEraAnyTimePrior = TRUE, 
+                                                                  useDrugGroupEraLongTerm = TRUE,
+                                                                  useDrugGroupEraMediumTerm = TRUE, 
+                                                                  useDrugGroupEraShortTerm = TRUE,
+                                                                  useDrugGroupEraOverlapping = TRUE, 
+                                                                  useDrugGroupEraStartLongTerm = TRUE,
                                                                   useDrugGroupEraStartMediumTerm = TRUE,
                                                                   useDrugGroupEraStartShortTerm = TRUE,
                                                                   useProcedureOccurrenceAnyTimePrior = TRUE,
                                                                   useProcedureOccurrenceLongTerm = TRUE,
                                                                   useProcedureOccurrenceMediumTerm = TRUE,
                                                                   useProcedureOccurrenceShortTerm = TRUE,
-                                                                  useDeviceExposureAnyTimePrior = TRUE, useDeviceExposureLongTerm = TRUE,
-                                                                  useDeviceExposureMediumTerm = TRUE, useDeviceExposureShortTerm = TRUE,
-                                                                  useMeasurementAnyTimePrior = TRUE, useMeasurementLongTerm = TRUE,
-                                                                  useMeasurementMediumTerm = TRUE, useMeasurementShortTerm = TRUE,
+                                                                  useDeviceExposureAnyTimePrior = TRUE, 
+                                                                  useDeviceExposureLongTerm = TRUE,
+                                                                  useDeviceExposureMediumTerm = TRUE, 
+                                                                  useDeviceExposureShortTerm = TRUE,
+                                                                  useMeasurementAnyTimePrior = TRUE, 
+                                                                  useMeasurementLongTerm = TRUE,
+                                                                  useMeasurementMediumTerm = TRUE, 
+                                                                  useMeasurementShortTerm = TRUE,
                                                                   useMeasurementValueAnyTimePrior = TRUE,
                                                                   useMeasurementValueLongTerm = TRUE,
                                                                   useMeasurementValueMediumTerm = TRUE,
@@ -133,10 +272,15 @@ run <- function(cdmDb, connectionDetails)
                                                                   useMeasurementRangeGroupLongTerm = TRUE,
                                                                   useMeasurementRangeGroupMediumTerm = TRUE,
                                                                   useMeasurementRangeGroupShortTerm = TRUE,
-                                                                  useObservationAnyTimePrior = TRUE, useObservationLongTerm = TRUE,
-                                                                  useObservationMediumTerm = TRUE, useObservationShortTerm = TRUE,
-                                                                  useCharlsonIndex = TRUE, useDcsi = TRUE, useChads2 = TRUE,
-                                                                  useChads2Vasc = TRUE, useDistinctConditionCountLongTerm = TRUE,
+                                                                  useObservationAnyTimePrior = TRUE, 
+                                                                  useObservationLongTerm = TRUE,
+                                                                  useObservationMediumTerm = TRUE, 
+                                                                  useObservationShortTerm = TRUE,
+                                                                  useCharlsonIndex = TRUE, 
+                                                                  useDcsi = TRUE, 
+                                                                  useChads2 = TRUE,
+                                                                  useChads2Vasc = TRUE, 
+                                                                  useDistinctConditionCountLongTerm = TRUE,
                                                                   useDistinctConditionCountMediumTerm = TRUE,
                                                                   useDistinctConditionCountShortTerm = TRUE,
                                                                   useDistinctIngredientCountLongTerm = TRUE,
@@ -148,14 +292,20 @@ run <- function(cdmDb, connectionDetails)
                                                                   useDistinctMeasurementCountLongTerm = TRUE,
                                                                   useDistinctMeasurementCountMediumTerm = TRUE,
                                                                   useDistinctMeasurementCountShortTerm = TRUE,
-                                                                  useVisitCountLongTerm = TRUE, useVisitCountMediumTerm = TRUE,
-                                                                  useVisitCountShortTerm = TRUE, longTermStartDays = -365,
-                                                                  mediumTermStartDays = -180, shortTermStartDays = -30, endDays = 0,
-                                                                  includedCovariateConceptIds = c(), addDescendantsToInclude = TRUE,
-                                                                  excludedCovariateConceptIds = c(), addDescendantsToExclude = TRUE,
+                                                                  useVisitCountLongTerm = TRUE, 
+                                                                  useVisitCountMediumTerm = TRUE,
+                                                                  useVisitCountShortTerm = TRUE, 
+                                                                  longTermStartDays = -365,
+                                                                  mediumTermStartDays = -180, 
+                                                                  shortTermStartDays = -30, 
+                                                                  endDays = 0,
+                                                                  includedCovariateConceptIds = c(), 
+                                                                  addDescendantsToInclude = TRUE,
+                                                                  excludedCovariateConceptIds = excludedConcepts, 
+                                                                  addDescendantsToExclude = TRUE,
                                                                   includedCovariateIds = c())
   
-  
+  covariateSettingsList <- list(covariateSettings, createDeliveryCovariateSettings(useDelivery = TRUE))
   
   getDbCmDataArgs <- CohortMethod::createGetDbCohortMethodDataArgs(washoutPeriod = 365,
                                                                    firstExposureOnly = TRUE,
@@ -163,7 +313,7 @@ run <- function(cdmDb, connectionDetails)
                                                                    studyStartDate = "20120601",
                                                                    studyEndDate = "20170630",
                                                                    excludeDrugsFromCovariates = FALSE,
-                                                                   covariateSettings = covariateSettings)
+                                                                   covariateSettings = covariateSettingsList)
   
   createStudyPopArgs <- CohortMethod::createCreateStudyPopulationArgs(removeSubjectsWithPriorOutcome = TRUE,
                                                                       firstExposureOnly = TRUE,
@@ -172,7 +322,7 @@ run <- function(cdmDb, connectionDetails)
                                                                       minDaysAtRisk = 1,
                                                                       riskWindowStart = 0,
                                                                       addExposureDaysToStart = FALSE,
-                                                                      riskWindowEnd = 60,
+                                                                      riskWindowEnd = 180,
                                                                       addExposureDaysToEnd = TRUE)
   
   
@@ -205,7 +355,7 @@ run <- function(cdmDb, connectionDetails)
                                                 stratifyByPs = FALSE,
                                                 stratifyByPsArgs = stratifyByPsArgs1,
                                                 computeCovariateBalance = TRUE,
-                                                fitOutcomeModel = TRUE,
+                                                fitOutcomeModel = FALSE,
                                                 fitOutcomeModelArgs = fitOutcomeModelArgs1)
   
   
@@ -216,7 +366,7 @@ run <- function(cdmDb, connectionDetails)
                                         cdmDatabaseSchema = cdmDatabaseSchema,
                                         exposureDatabaseSchema = resultsDatabaseSchema,
                                         exposureTable = exposureTable,
-                                        outcomeDatabaseSchema = resultsDatabaseSchema,
+                                        outcomeDatabaseSchema = cdmDatabaseSchema,
                                         outcomeTable = outcomeTable,
                                         cdmVersion = cdmVersion,
                                         outputFolder = outputFolder,
@@ -224,14 +374,18 @@ run <- function(cdmDb, connectionDetails)
                                         drugComparatorOutcomesList = drugComparatorOutcomesList,
                                         getDbCohortMethodDataThreads = 1,
                                         createPsThreads = 1,
-                                        psCvThreads = min(16, maxCores),
+                                        psCvThreads = min(28, maxCores),
                                         computeCovarBalThreads = min(3, maxCores),
                                         createStudyPopThreads = min(3, maxCores),
                                         trimMatchStratifyThreads = min(10, maxCores),
                                         fitOutcomeModelThreads = max(1, round(maxCores/4)),
                                         outcomeCvThreads = min(4, maxCores),
                                         refitPsForEveryOutcome = FALSE)
-  
+      
+}
+
+modelling <- function()
+{
   ## Summarize the results
   analysisSummary <- CohortMethod::summarizeAnalyses(result)
   head(analysisSummary)
@@ -466,7 +620,6 @@ run <- function(cdmDb, connectionDetails)
         outcomeSummaryOutput <- capture.output(printCoefmat(outcomeSummaryOutput))
         outcomeModelOutput <- c(outcomeModelOutput, outcomeSummaryOutput)
         writeLines(outcomeModelOutput)
-        
       }
     }
   }

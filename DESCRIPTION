@@ -2,7 +2,9 @@ Package: PPMD
 Type: Package
 Title: Postpartum Depression and Mood Disorders Study
 Version: 0.1.0
-Author: Ajit Londhe [aut, cre]
+Author: Ajit Londhe [aut, cre],
+        Shilpa Londhe,
+        Jessica K. Holzer
 Maintainer: Ajit Londhe <alondhe2@its.jnj.com>
 Description: Executes study on PPMD
 Encoding: UTF-8

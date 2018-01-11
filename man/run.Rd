@@ -4,10 +4,10 @@
 \alias{run}
 \title{Run the analysis for a CDM}
 \usage{
-run(cdmDb, connectionDetails)
+run(cdmDb, scratchDatabaseSchema, connectionDetails)
 }
 \arguments{
-\item{cdmDb}{}
+\item{connectionDetails}{}
 }
 \description{
 Run the analysis for a CDM

@@ -74,15 +74,15 @@ getDeliveryCovariateData <- function(connection,
   
   # Construct covariate reference:
   covariateRef_1 <- data.frame(covariateId = 1,
-                               covariateName = "Delivery - SB",
+                               covariateName = "SB",
                                analysisId = 1,
                                conceptId = 0)
   covariateRef_2 <- data.frame(covariateId = 2,
-                               covariateName = "Delivery - ECT",
+                               covariateName = "ECT",
                                analysisId = 1,
                                conceptId = 0)
   covariateRef_3 <- data.frame(covariateId = 3,
-                               covariateName = "Delivery - LB/DELIV",
+                               covariateName = "LB or DELIV",
                                analysisId = 1,
                                conceptId = 0)
   covariateRef <- rbind(covariateRef_1, covariateRef_2, covariateRef_3)
@@ -130,7 +130,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
   exposureTable <- paste(tablePrefix, "cohort", sep = "_")
   outcomeTable <- "cohort"
   cdmVersion <- "5" 
-  outputFolder <- "output_2"
+  outputFolder <- "output_5"
   maxCores <- parallel::detectCores()
   # if(!dir.exists(outputFolder)){
   #   dir.create(outputFolder, recursive = TRUE)
@@ -298,7 +298,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
                                                                   longTermStartDays = -365,
                                                                   mediumTermStartDays = -180, 
                                                                   shortTermStartDays = -30, 
-                                                                  endDays = 0,
+                                                                  endDays = -1,
                                                                   includedCovariateConceptIds = c(), 
                                                                   addDescendantsToInclude = TRUE,
                                                                   excludedCovariateConceptIds = excludedConcepts, 
@@ -355,7 +355,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
                                                 stratifyByPs = FALSE,
                                                 stratifyByPsArgs = stratifyByPsArgs1,
                                                 computeCovariateBalance = TRUE,
-                                                fitOutcomeModel = FALSE,
+                                                fitOutcomeModel = TRUE,
                                                 fitOutcomeModelArgs = fitOutcomeModelArgs1)
   
   
@@ -373,19 +373,15 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
                                         cmAnalysisList = cmAnalysisList,
                                         drugComparatorOutcomesList = drugComparatorOutcomesList,
                                         getDbCohortMethodDataThreads = 1,
-                                        createPsThreads = 1,
-                                        psCvThreads = min(28, maxCores),
+                                        createPsThreads = 2,
+                                        psCvThreads = 20, #min(28, maxCores),
                                         computeCovarBalThreads = min(3, maxCores),
                                         createStudyPopThreads = min(3, maxCores),
                                         trimMatchStratifyThreads = min(10, maxCores),
                                         fitOutcomeModelThreads = max(1, round(maxCores/4)),
                                         outcomeCvThreads = min(4, maxCores),
                                         refitPsForEveryOutcome = FALSE)
-      
-}
-
-modelling <- function()
-{
+  
   ## Summarize the results
   analysisSummary <- CohortMethod::summarizeAnalyses(result)
   head(analysisSummary)
@@ -575,45 +571,45 @@ modelling <- function()
         
         
         # Outcome Model ----
-        
+
         outcomeFile <- result$outcomeModelFile[result$target == currentAnalysisSubset$targetId &
                                                  result$comparatorId == currentAnalysisSubset$comparatorId &
                                                  result$outcomeId == currentOutcomeId &
                                                  result$analysisId == analysisId]
         outcomeModel <- readRDS(outcomeFile)
-        
+
         # Calibrated results -----
-        outcomeSummary <- newSummary[newSummary$targetId == currentAnalysisSubset$targetId & 
-                                       newSummary$comparatorId == currentAnalysisSubset$comparatorId & 
-                                       newSummary$outcomeId == currentOutcomeId & 
-                                       newSummary$analysisId == analysisId, ]  
-        
-        outcomeSummaryOutput <- data.frame(outcomeSummary$rr, 
-                                           outcomeSummary$ci95lb, 
-                                           outcomeSummary$ci95ub, 
-                                           outcomeSummary$logRr, 
+        outcomeSummary <- newSummary[newSummary$targetId == currentAnalysisSubset$targetId &
+                                       newSummary$comparatorId == currentAnalysisSubset$comparatorId &
+                                       newSummary$outcomeId == currentOutcomeId &
+                                       newSummary$analysisId == analysisId, ]
+
+        outcomeSummaryOutput <- data.frame(outcomeSummary$rr,
+                                           outcomeSummary$ci95lb,
+                                           outcomeSummary$ci95ub,
+                                           outcomeSummary$logRr,
                                            outcomeSummary$seLogRr,
                                            outcomeSummary$p,
-                                           outcomeSummary$calibratedP, 
+                                           outcomeSummary$calibratedP,
                                            outcomeSummary$calibratedP_lb95ci,
                                            outcomeSummary$calibratedP_ub95ci,
                                            outcomeSummary$null_mean,
                                            outcomeSummary$null_sd)
-        
-        colnames(outcomeSummaryOutput) <- c("Estimate", 
-                                            "lower .95", 
-                                            "upper .95", 
-                                            "logRr", 
-                                            "seLogRr", 
-                                            "p", 
-                                            "cal p",  
-                                            "cal p - lower .95",  
-                                            "cal p - upper .95", 
-                                            "null mean",  
+
+        colnames(outcomeSummaryOutput) <- c("Estimate",
+                                            "lower .95",
+                                            "upper .95",
+                                            "logRr",
+                                            "seLogRr",
+                                            "p",
+                                            "cal p",
+                                            "cal p - lower .95",
+                                            "cal p - upper .95",
+                                            "null mean",
                                             "null sd")
-        
+
         rownames(outcomeSummaryOutput) <- "treatment"
-        
+
         # View the outcome model -----
         outcomeModelOutput <- capture.output(outcomeModel)
         outcomeModelOutput <- head(outcomeModelOutput,n=length(outcomeModelOutput)-2)
@@ -623,4 +619,10 @@ modelling <- function()
       }
     }
   }
+      
+}
+
+modelling <- function()
+{
+
 }

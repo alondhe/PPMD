@@ -32,3 +32,7 @@ for (cdmDb in cdmDatabaseSchemas)
       scratchDatabaseSchema = scratchDatabaseSchema,
       connectionDetails = connectionDetails)
 }
+
+bal <- readRDS("output_5/Bal_l1_s1_p1_t5441_c5442_s1_o5440.rds")
+
+View(bal)

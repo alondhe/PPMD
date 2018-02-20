@@ -45,9 +45,9 @@ createDeliveryCovariateSettings <- function(useDelivery = TRUE) {
 getDeliveryCovariateData <- function(connection, 
                                      oracleTempSchema = NULL, 
                                      cdmDatabaseSchema, 
-                                     cdmVersion = "5", 
                                      cohortTable = "#cohort_person",
                                      cohortId = -1,
+                                     cdmVersion = "5",
                                      rowIdField = "subject_id", 
                                      covariateSettings,
                                      aggregated = FALSE) 
@@ -70,7 +70,7 @@ getDeliveryCovariateData <- function(connection,
   # Retrieve the covariate:
   covariates <- DatabaseConnector::querySql.ffdf(connection, sql)
   # Convert colum names to camelCase:
-  colnames(covariates) <- snakeCaseToCamelCase(colnames(covariates))
+  colnames(covariates) <- SqlRender::snakeCaseToCamelCase(colnames(covariates))
   
   # Construct covariate reference:
   covariateRef_1 <- data.frame(covariateId = 1,
@@ -118,9 +118,11 @@ getDeliveryCovariateData <- function(connection,
 #' @param cdmDb
 #' @param scratchDatabaseSchema
 #' @param connectionDetails
+#' @param negativeControlConcepts
 #' 
 #' @export
-run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
+run <- function(cdmDb, scratchDatabaseSchema, connectionDetails, excludedConcepts, 
+                negativeControlConcepts, blindOutcomeModel = TRUE, outputFolder)
 {
   # Data extraction ----
   tablePrefix <- paste("al", "ppmd", strsplit(x = cdmDb$key, split = "_")[[1]][1], sep = "_")
@@ -130,7 +132,6 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
   exposureTable <- paste(tablePrefix, "cohort", sep = "_")
   outcomeTable <- "cohort"
   cdmVersion <- "5" 
-  outputFolder <- "output_5"
   maxCores <- parallel::detectCores()
   # if(!dir.exists(outputFolder)){
   #   dir.create(outputFolder, recursive = TRUE)
@@ -162,9 +163,6 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
   
   # Get all  Concept IDs for exclusion ----
   
-  excludedConcepts <- unique(c(4175637, 
-                               OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 4805),
-                               OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 5305)))
   
   # Get all  Concept IDs for inclusion ----
   
@@ -180,10 +178,6 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
   omIncludedConcepts <- c()
   
   
-  # Get all  Concept IDs for empirical calibration ----
-  
-  negativeControlConcepts <- c()
-  
   
   # Create drug comparator and outcome arguments by combining target + comparator + outcome + negative controls ----
   dcos <- CohortMethod::createDrugComparatorOutcomes(targetId = targetCohortId,
@@ -197,17 +191,17 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
   
   
   # Define which types of covariates must be constructed ----
-  covariateSettings <- FeatureExtraction::createCovariateSettings(useDemographicsGender = FALSE,
+  covariateSettings <- FeatureExtraction::createCovariateSettings(useDemographicsGender = TRUE,
                                                                   useDemographicsAge = TRUE, 
                                                                   useDemographicsAgeGroup = TRUE,
                                                                   useDemographicsRace = TRUE, 
                                                                   useDemographicsEthnicity = TRUE,
                                                                   useDemographicsIndexYear = TRUE, 
-                                                                  useDemographicsIndexMonth = FALSE,
+                                                                  useDemographicsIndexMonth = TRUE,
                                                                   useDemographicsPriorObservationTime = TRUE,
                                                                   useDemographicsPostObservationTime = TRUE,
                                                                   useDemographicsTimeInCohort = FALSE,
-                                                                  useDemographicsIndexYearMonth = FALSE,
+                                                                  useDemographicsIndexYearMonth = TRUE,
                                                                   useConditionOccurrenceAnyTimePrior = TRUE,
                                                                   useConditionOccurrenceLongTerm = TRUE,
                                                                   useConditionOccurrenceMediumTerm = TRUE,
@@ -220,7 +214,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
                                                                   useConditionEraLongTerm = TRUE,
                                                                   useConditionEraMediumTerm = TRUE, 
                                                                   useConditionEraShortTerm = TRUE,
-                                                                  useConditionEraOverlapping = TRUE, 
+                                                                  useConditionEraOverlapping = FALSE, 
                                                                   useConditionEraStartLongTerm = TRUE,
                                                                   useConditionEraStartMediumTerm = TRUE,
                                                                   useConditionEraStartShortTerm = TRUE,
@@ -228,7 +222,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
                                                                   useConditionGroupEraLongTerm = TRUE,
                                                                   useConditionGroupEraMediumTerm = TRUE,
                                                                   useConditionGroupEraShortTerm = TRUE,
-                                                                  useConditionGroupEraOverlapping = TRUE,
+                                                                  useConditionGroupEraOverlapping = FALSE,
                                                                   useConditionGroupEraStartLongTerm = TRUE,
                                                                   useConditionGroupEraStartMediumTerm = TRUE,
                                                                   useConditionGroupEraStartShortTerm = TRUE,
@@ -240,7 +234,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
                                                                   useDrugEraLongTerm = TRUE,
                                                                   useDrugEraMediumTerm = TRUE, 
                                                                   useDrugEraShortTerm = TRUE,
-                                                                  useDrugEraOverlapping = TRUE, 
+                                                                  useDrugEraOverlapping = FALSE, 
                                                                   useDrugEraStartLongTerm = TRUE,
                                                                   useDrugEraStartMediumTerm = TRUE, 
                                                                   useDrugEraStartShortTerm = TRUE,
@@ -248,7 +242,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
                                                                   useDrugGroupEraLongTerm = TRUE,
                                                                   useDrugGroupEraMediumTerm = TRUE, 
                                                                   useDrugGroupEraShortTerm = TRUE,
-                                                                  useDrugGroupEraOverlapping = TRUE, 
+                                                                  useDrugGroupEraOverlapping = FALSE, 
                                                                   useDrugGroupEraStartLongTerm = TRUE,
                                                                   useDrugGroupEraStartMediumTerm = TRUE,
                                                                   useDrugGroupEraStartShortTerm = TRUE,
@@ -310,8 +304,8 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
   getDbCmDataArgs <- CohortMethod::createGetDbCohortMethodDataArgs(washoutPeriod = 365,
                                                                    firstExposureOnly = TRUE,
                                                                    removeDuplicateSubjects = TRUE,
-                                                                   studyStartDate = "20120601",
-                                                                   studyEndDate = "20170630",
+                                                                   studyStartDate = "20090101",
+                                                                   studyEndDate = "20121231",
                                                                    excludeDrugsFromCovariates = FALSE,
                                                                    covariateSettings = covariateSettingsList)
   
@@ -337,7 +331,7 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
   createPsArgs1 <- CohortMethod::createCreatePsArgs(control = defaultControl) # Using only defaults
   trimByPsArgs1 <- CohortMethod::createTrimByPsArgs() # Using only defaults 
   trimByPsToEquipoiseArgs1 <- CohortMethod::createTrimByPsToEquipoiseArgs() # Using only defaults 
-  matchOnPsArgs1 <- CohortMethod::createMatchOnPsArgs(caliper = 0.25, caliperScale = "standardized", maxRatio = 1) 
+  matchOnPsArgs1 <- CohortMethod::createMatchOnPsArgs(caliper = 0.25, caliperScale = "standardized", maxRatio = 10) 
   stratifyByPsArgs1 <- CohortMethod::createStratifyByPsArgs() # Using only defaults 
   
   cmAnalysis1 <- CohortMethod::createCmAnalysis(analysisId = 1,
@@ -610,12 +604,15 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails)
 
         rownames(outcomeSummaryOutput) <- "treatment"
 
-        # View the outcome model -----
-        outcomeModelOutput <- capture.output(outcomeModel)
-        outcomeModelOutput <- head(outcomeModelOutput,n=length(outcomeModelOutput)-2)
-        outcomeSummaryOutput <- capture.output(printCoefmat(outcomeSummaryOutput))
-        outcomeModelOutput <- c(outcomeModelOutput, outcomeSummaryOutput)
-        writeLines(outcomeModelOutput)
+        if (!blindOutcomeModel)
+        {
+          # View the outcome model -----
+          outcomeModelOutput <- capture.output(outcomeModel)
+          outcomeModelOutput <- head(outcomeModelOutput,n=length(outcomeModelOutput)-2)
+          outcomeSummaryOutput <- capture.output(printCoefmat(outcomeSummaryOutput))
+          outcomeModelOutput <- c(outcomeModelOutput, outcomeSummaryOutput)
+          writeLines(outcomeModelOutput)
+        }
       }
     }
   }

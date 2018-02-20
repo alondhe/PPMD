@@ -4,10 +4,11 @@
 \alias{run}
 \title{Run the analysis for a CDM}
 \usage{
-run(cdmDb, scratchDatabaseSchema, connectionDetails)
+run(cdmDb, scratchDatabaseSchema, connectionDetails, excludedConcepts,
+  negativeControlConcepts, blindOutcomeModel = TRUE, outputFolder)
 }
 \arguments{
-\item{connectionDetails}{}
+\item{negativeControlConcepts}{}
 }
 \description{
 Run the analysis for a CDM

@@ -1,20 +1,28 @@
-source("C:/Users/admin_alondhe2/Desktop/setCredentials.R")
+source("/home/alondhe2/Desktop/setCredentials.R")
 
-fftempdir <- "A:/fftemp/ppmd"
+fftempdir <- "/ebs/fftemp/ppmd"
 if (!dir.exists(fftempdir))
 {
   dir.create(fftempdir, recursive = TRUE)
 }
 options(fftempdir = fftempdir)
 
-cdmDatabaseSchemas <- list(
-  list(key = "OPTUMEXTSES_V675", 
-       cdmDatabaseSchema = "CDM_OPTUM_EXTENDED_SES_V675.dbo",
-       resultsDatabaseSchema = "CDM_OPTUM_EXTENDED_SES_V675.ohdsi_results")
-  # list(key = "OPTUMEXTDOD_V654", 
-  #      cdmDatabaseSchema = "CDM_OPTUM_EXTENDED_DOD_V654.dbo",
-  #      resultsDatabaseSchema = "CDM_OPTUM_EXTENDED_DOD_V654.ohdsi_results")
-)
+outputFolder <- "output_12"
+if(!dir.exists(outputFolder)){
+  dir.create(outputFolder, recursive = TRUE)
+}
+
+cdmDb <- list(
+  key = "OPTUMEXTSES_V694", 
+       cdmDatabaseSchema = "CDM_OPTUM_EXTENDED_SES_V694.dbo",
+       resultsDatabaseSchema = "CDM_OPTUM_EXTENDED_SES_V694.ohdsi_results")
+  
+excludedConcepts <- unique(c(4175637,196168, 
+                             OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 5759),
+                             OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 2560),
+                             OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 3254),
+                             OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 4805),
+                             OhdsiRTools::getConceptSetConceptIds(baseUrl = Sys.getenv("baseUrl"), setId = 5305)))
 
 connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = Sys.getenv("cdmDbms"), 
                                                                 server = Sys.getenv("cdmServer"), 
@@ -23,16 +31,19 @@ connectionDetails <- DatabaseConnector::createConnectionDetails(dbms = Sys.geten
                                                                 password = Sys.getenv("cdmPassword"))
 scratchDatabaseSchema <- "scratch.dbo"
 
-for (cdmDb in cdmDatabaseSchemas)
-{
-  # createCohorts(cdmDb = cdmDb,
-  #               scratchDatabaseSchema = scratchDatabaseSchema,
-  #               connectionDetails = connectionDetails)
-  run(cdmDb = cdmDb,
-      scratchDatabaseSchema = scratchDatabaseSchema,
-      connectionDetails = connectionDetails)
-}
 
-bal <- readRDS("output_5/Bal_l1_s1_p1_t5441_c5442_s1_o5440.rds")
+# createCohorts(cdmDb = cdmDb,
+#               scratchDatabaseSchema = scratchDatabaseSchema,
+#               connectionDetails = connectionDetails)
+run(cdmDb = cdmDb,
+    scratchDatabaseSchema = scratchDatabaseSchema,
+    connectionDetails = connectionDetails,
+    excludedConcepts = excludedConcepts,
+    outputFolder = outputFolder,
+    negativeControlConcepts = c(5975, 5976, 5977, 5978, 5979, 5980, 5981))
+      #c(375281,4040923,4123726,139099,81454,4209845,28060))
 
-View(bal)
+
+
+# bal <- readRDS("output_5/Bal_l1_s1_p1_t5441_c5442_s1_o5440.rds")
+# bal[bal$covariateId == 1,]

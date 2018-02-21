@@ -127,10 +127,10 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails, excludedConcept
   # Data extraction ----
   tablePrefix <- paste("al", "ppmd", strsplit(x = cdmDb$key, split = "_")[[1]][1], sep = "_")
   
-  cdmDatabaseSchema <- cdmDb$cdmDatabaseSchema
-  resultsDatabaseSchema <- scratchDatabaseSchema
+  # cdmDatabaseSchema <- cdmDb$cdmDatabaseSchema
+  # resultsDatabaseSchema <- scratchDatabaseSchema
   exposureTable <- paste(tablePrefix, "cohort", sep = "_")
-  outcomeTable <- "cohort"
+  # outcomeTable <- "cohort"
   cdmVersion <- "5" 
   maxCores <- parallel::detectCores()
   # if(!dir.exists(outputFolder)){
@@ -357,18 +357,18 @@ run <- function(cdmDb, scratchDatabaseSchema, connectionDetails, excludedConcept
   
   # Run the analysis ----
   result <- CohortMethod::runCmAnalyses(connectionDetails = connectionDetails,
-                                        cdmDatabaseSchema = cdmDatabaseSchema,
-                                        exposureDatabaseSchema = resultsDatabaseSchema,
+                                        cdmDatabaseSchema = cdmDb$cdmDatabaseSchema,
+                                        exposureDatabaseSchema = scratchDatabaseSchema,
                                         exposureTable = exposureTable,
-                                        outcomeDatabaseSchema = cdmDatabaseSchema,
-                                        outcomeTable = outcomeTable,
+                                        outcomeDatabaseSchema = cdmDb$resultsDatabaseSchema,
+                                        outcomeTable = "cohort",
                                         cdmVersion = cdmVersion,
                                         outputFolder = outputFolder,
                                         cmAnalysisList = cmAnalysisList,
                                         drugComparatorOutcomesList = drugComparatorOutcomesList,
                                         getDbCohortMethodDataThreads = 1,
                                         createPsThreads = 2,
-                                        psCvThreads = 20, #min(28, maxCores),
+                                        psCvThreads = min(20, maxCores),
                                         computeCovarBalThreads = min(3, maxCores),
                                         createStudyPopThreads = min(3, maxCores),
                                         trimMatchStratifyThreads = min(10, maxCores),

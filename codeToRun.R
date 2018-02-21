@@ -1,13 +1,16 @@
-source("/home/alondhe2/Desktop/setCredentials.R")
+#source("/home/alondhe2/Desktop/setCredentials.R")
+#fftempdir <- "/ebs/fftemp/ppmd"
 
-fftempdir <- "/ebs/fftemp/ppmd"
+source("C:/Users/admin_alondhe2/Desktop/setCredentials.R")
+fftempdir <- "/fftemp/ppmd"
+
 if (!dir.exists(fftempdir))
 {
   dir.create(fftempdir, recursive = TRUE)
 }
 options(fftempdir = fftempdir)
 
-outputFolder <- "output_12"
+outputFolder <- "output_4"
 if(!dir.exists(outputFolder)){
   dir.create(outputFolder, recursive = TRUE)
 }
